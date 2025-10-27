@@ -39,7 +39,7 @@ func initRepo() error {
 	var dirPerm os.FileMode = 0700
 	var filePerm os.FileMode = 0600
 	var err error
-	if err = os.Mkdir(repoDir, dirPerm); err != nil && !os.IsExist(err) {
+	if err = os.Mkdir(repoDir, dirPerm); err != nil && os.IsNotExist(err) {
 		return fmt.Errorf("failed to create .gitre directory: %w", err)
 	}
 	if err = os.MkdirAll(filepath.Join(repoDir, "refs", "heads"), dirPerm); err != nil {
@@ -76,6 +76,16 @@ func initRepo() error {
 		return fmt.Errorf("failed to check HEAD file: %w", err)
 	}
 
+	var ignoreContent string = "*.exe\n*.dll\n.env\n"
+
+	if _, err = os.Stat(".gitreignore"); os.IsNotExist(err) {
+		if err = os.WriteFile(".gitreignore", []byte(ignoreContent), 0644); err != nil {
+			return fmt.Errorf("failed to create .gitreignore file: %w", err)
+		}
+	} else if err != nil {
+		return fmt.Errorf("failed to check .gitreignore file: %w", err)
+	}
+
 	fmt.Println("Initialized gitre repository:", repoDir)
 
 	return nil
@@ -83,6 +93,8 @@ func initRepo() error {
 
 func add(args []string) {
 	fmt.Println("Adding files...")
+	obj, _ := HashFile("example.txt")
+	fmt.Println("Object hash:", obj)
 	return
 }
 
