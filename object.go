@@ -4,15 +4,77 @@ import (
 	"bytes"
 	"compress/zlib"
 	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 )
 
-func HashFile(filePath string) (string, error) {
-	data, err := os.ReadFile(filePath)
+type IndexEntry struct {
+	Path  string `json:"path"`
+	Hash  string `json:"hash"`
+	Mode  int64  `json:"mode"`
+	Size  int64  `json:"size"`
+	Mtime int64  `json:"mtime"`
+}
+
+func IndexObject(file string) error {
+	objectHash, err := AddObject(file)
 	if err != nil {
-		return "", fmt.Errorf("failed reading file %s: %w", filePath, err)
+		return fmt.Errorf("failed to hash file %s: %w", file, err)
+	}
+	fileInfo, err := os.Stat(file)
+	if err != nil {
+		return fmt.Errorf("failed to retrieve file information: %w", err)
+	}
+	entry := IndexEntry{
+		Path:  file,
+		Hash:  objectHash,
+		Mode:  int64(fileInfo.Mode()),
+		Size:  fileInfo.Size(),
+		Mtime: fileInfo.ModTime().Unix(),
+	}
+
+	indexBytes, err := os.ReadFile(filepath.Join(".gitre", "index"))
+	if err != nil {
+		return fmt.Errorf("failed to read index file: %w", err)
+	}
+
+	var entries []IndexEntry
+	if len(indexBytes) == 0 {
+		indexBytes = []byte("[]")
+	}
+	if err := json.Unmarshal(indexBytes, &entries); err != nil {
+		return fmt.Errorf("failed to unmarsal index content: %w", err)
+	}
+
+	inserted := false
+	for i, e := range entries {
+		if entry.Path == e.Path {
+			entries[i] = entry
+			inserted = true
+			break
+		}
+	}
+	if !inserted {
+		entries = append(entries, entry)
+	}
+
+	indexBytes, err = json.MarshalIndent(entries, "", "	")
+	if err != nil {
+		return fmt.Errorf("failed to marshal json content: %w", err)
+	}
+	if err = os.WriteFile(filepath.Join(".gitre", "index"), indexBytes, 0600); err != nil {
+		return fmt.Errorf("failed to write marshalled content to index: %w", err)
+	}
+
+	return nil
+}
+
+func AddObject(file string) (string, error) {
+	data, err := os.ReadFile(file)
+	if err != nil {
+		return "", fmt.Errorf("failed reading file %s: %w", file, err)
 	}
 	headerString := fmt.Sprintf("blob %d", len(data))
 	var content bytes.Buffer
@@ -35,8 +97,8 @@ func HashFile(filePath string) (string, error) {
 		return "", fmt.Errorf("failed to compress content: %w", err)
 	}
 	compressWriter.Close()
-	filePath = filepath.Join(repoDir, dirName, fileName)
-	if err = os.WriteFile(filePath, compressedData.Bytes(), 0600); err != nil {
+	file = filepath.Join(repoDir, dirName, fileName)
+	if err = os.WriteFile(file, compressedData.Bytes(), 0600); err != nil {
 		return "", fmt.Errorf("failed to write object file: %w", err)
 	}
 

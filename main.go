@@ -61,7 +61,7 @@ func initRepo() error {
 	}
 
 	if _, err = os.Stat(filepath.Join(repoDir, "index")); os.IsNotExist(err) {
-		if _, err = os.Create(filepath.Join(repoDir, "index")); err != nil {
+		if err = os.WriteFile(filepath.Join(repoDir, "index"), []byte("[]"), filePerm); err != nil {
 			return fmt.Errorf("failed to create index file: %w", err)
 		}
 	} else if err != nil {
@@ -91,11 +91,24 @@ func initRepo() error {
 	return nil
 }
 
-func add(args []string) {
-	fmt.Println("Adding files...")
-	obj, _ := HashFile("example.txt")
-	fmt.Println("Object hash:", obj)
-	return
+func add(args []string) []error {
+	var err error
+	var errors []error
+	for _, arg := range args {
+		err = IndexObject(arg)
+		if err != nil {
+			errors = append(errors, fmt.Errorf("failed to add %s: %w", arg, err))
+		} else {
+			fmt.Printf("added %s\n", arg)
+		}
+	}
+	if len(errors) > 0 {
+		for _, err := range errors {
+			fmt.Fprintf(os.Stderr, "%v\n", err)
+		}
+		return errors
+	}
+	return nil
 }
 
 func commit() {
