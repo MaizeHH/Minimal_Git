@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -28,11 +29,14 @@ func main() {
 	case "commit":
 		commit(os.Args[2])
 		return
+	case "log":
+		log()
+		return
 	case "status":
 		status()
 		return
 	default:
-		fmt.Printf("unknown command: %s. available commands: init, add, commit, status\n", os.Args[1])
+		fmt.Printf("unknown command: %s. available commands: init, add, commit, status, log\n", os.Args[1])
 		return
 	}
 
@@ -131,9 +135,15 @@ func commit(message string) error {
 		return fmt.Errorf("failed to write tree objects: %w", err)
 	}
 
+	head, err := os.ReadFile(".gitre/HEAD")
+	ref := bytes.TrimPrefix(head, []byte("ref: "))
+	path := filepath.Join(".gitre", string(ref))
+	p_hash, err := os.ReadFile(path)
 	var commitContent strings.Builder
 	commitContent.WriteString(fmt.Sprintf("tree %s\n", rootTreeHash))
-	commitContent.WriteString("\n")
+	if len(p_hash) > 0 {
+		commitContent.WriteString(fmt.Sprintf("parent %s\n", string(p_hash)))
+	}
 	commitContent.WriteString(message)
 
 	commitHash, err := HashStore([]byte(commitContent.String()), "commit")
@@ -147,6 +157,38 @@ func commit(message string) error {
 	}
 
 	fmt.Printf("[%s] %s\n", commitHash[:7], message)
+	return nil
+}
+
+func log() error {
+	head, err := os.ReadFile(".gitre/HEAD")
+	if err != nil {
+		return fmt.Errorf("failed to read HEAD: %w", err)
+	}
+	head = bytes.TrimSpace(head)
+	ref := bytes.TrimPrefix(head, []byte("ref: "))
+	path := filepath.Join(".gitre", string(ref))
+	hash, err := os.ReadFile(path)
+	for len(hash) > 0 {
+		content, err := ExtractObject(hash)
+		if err != nil {
+			return fmt.Errorf("error extracting object %s: %w", hash, err)
+		}
+		fmt.Printf("commit %s\n", hash)
+		fmt.Printf("%s", string(content))
+		var parentHash []byte
+		lines := bytes.SplitSeq(content, []byte("\n"))
+		for line := range lines {
+			if after, ok := bytes.CutPrefix(line, []byte("parent ")); ok {
+				parentHash = after
+				break
+			}
+		}
+		hash = parentHash
+		if len(hash) > 0 {
+			fmt.Println("  |")
+		}
+	}
 	return nil
 }
 

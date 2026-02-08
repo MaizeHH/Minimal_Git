@@ -111,3 +111,34 @@ func HashStore(data []byte, objType string) (string, error) {
 
 	return objectHash, nil
 }
+
+func ExtractObject(hash []byte) ([]byte, error) {
+	dirName := string(hash[:2])
+	fileName := string(hash[2:])
+	path := filepath.Join(".gitre", "objects", dirName, fileName)
+
+	compressedData, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("could not find object: %w", err)
+	}
+
+	reader, err := zlib.NewReader(bytes.NewReader(compressedData))
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize zlib reader: %w", err)
+	}
+	defer reader.Close()
+
+	var out bytes.Buffer
+	_, err = out.ReadFrom(reader)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decompress data: %w", err)
+	}
+
+	fullContent := out.Bytes()
+	nullIndex := bytes.IndexByte(fullContent, 0)
+	if nullIndex == -1 {
+		return nil, fmt.Errorf("invalid object format: no null byte found")
+	}
+
+	return fullContent[nullIndex+1:], nil
+}
