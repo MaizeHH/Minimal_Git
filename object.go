@@ -19,7 +19,11 @@ type IndexEntry struct {
 }
 
 func IndexObject(file string) error {
-	objectHash, err := AddObject(file)
+	data, err := os.ReadFile(file)
+	if err != nil {
+		return fmt.Errorf("failed reading file %s: %w", file, err)
+	}
+	objectHash, err := HashStore(data, "blob")
 	if err != nil {
 		return fmt.Errorf("failed to hash file %s: %w", file, err)
 	}
@@ -71,34 +75,37 @@ func IndexObject(file string) error {
 	return nil
 }
 
-func AddObject(file string) (string, error) {
-	data, err := os.ReadFile(file)
-	if err != nil {
-		return "", fmt.Errorf("failed reading file %s: %w", file, err)
-	}
-	headerString := fmt.Sprintf("blob %d", len(data))
+func HashStore(data []byte, objType string) (string, error) {
+	headerString := fmt.Sprintf("%s %d", objType, len(data))
+
 	var content bytes.Buffer
 	content.WriteString(headerString)
 	content.WriteByte(0)
 	content.Write(data)
+
 	var byteContent []byte = content.Bytes()
+
 	hasher := sha256.New()
 	hasher.Write(byteContent)
 	objectHash := fmt.Sprintf("%x", hasher.Sum(nil))
+
 	dirName := objectHash[:2]
 	fileName := objectHash[2:]
 	repoDir := filepath.Join(".gitre", "objects")
-	if err = os.Mkdir(filepath.Join(repoDir, dirName), 0700); err != nil && !os.IsExist(err) {
+
+	if err := os.Mkdir(filepath.Join(repoDir, dirName), 0755); err != nil && !os.IsExist(err) {
 		return "", fmt.Errorf("failed to create .gitre/objects/%s directory: %w", dirName, err)
 	}
+
 	var compressedData bytes.Buffer
 	compressWriter := zlib.NewWriter(&compressedData)
-	if _, err = compressWriter.Write(byteContent); err != nil {
+	if _, err := compressWriter.Write(byteContent); err != nil {
 		return "", fmt.Errorf("failed to compress content: %w", err)
 	}
 	compressWriter.Close()
-	file = filepath.Join(repoDir, dirName, fileName)
-	if err = os.WriteFile(file, compressedData.Bytes(), 0600); err != nil {
+
+	objectPath := filepath.Join(repoDir, dirName, fileName)
+	if err := os.WriteFile(objectPath, compressedData.Bytes(), 0644); err != nil {
 		return "", fmt.Errorf("failed to write object file: %w", err)
 	}
 

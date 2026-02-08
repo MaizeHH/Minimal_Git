@@ -1,9 +1,6 @@
 package main
 
 import (
-	"bytes"
-	"compress/zlib"
-	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -75,36 +72,6 @@ func BuildTree(entries []IndexEntry) *Node {
 		}
 	}
 	return root
-}
-
-func HashStore(data []byte, objType string) (string, error) {
-	header := fmt.Sprintf("%s %d\x00", objType, len(data))
-	fullContent := append([]byte(header), data...)
-
-	hasher := sha256.New()
-	hasher.Write(fullContent)
-	hash := fmt.Sprintf("%x", hasher.Sum(nil))
-
-	dirName := hash[:2]
-	fileName := hash[2:]
-	objPath := filepath.Join(".gitre", "objects", dirName, fileName)
-
-	if err := os.MkdirAll(filepath.Join(".gitre", "objects", dirName), 0755); err != nil {
-		return "", err
-	}
-
-	var buf bytes.Buffer
-	zw := zlib.NewWriter(&buf)
-	if _, err := zw.Write(fullContent); err != nil {
-		return "", err
-	}
-	zw.Close()
-
-	if err := os.WriteFile(objPath, buf.Bytes(), 0644); err != nil {
-		return "", err
-	}
-
-	return hash, nil
 }
 
 // process & compress tree
