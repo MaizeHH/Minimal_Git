@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 func main() {
@@ -25,10 +26,13 @@ func main() {
 		add(os.Args[2:])
 		return
 	case "commit":
-		commit()
+		commit(os.Args[2])
+		return
+	case "status":
+		status()
 		return
 	default:
-		fmt.Printf("unknown command: %s. available commands: init, add, commit\n", os.Args[1])
+		fmt.Printf("unknown command: %s. available commands: init, add, commit, status\n", os.Args[1])
 		return
 	}
 
@@ -111,7 +115,41 @@ func add(args []string) []error {
 	return nil
 }
 
-func commit() {
-	fmt.Println("Committing changes...")
-	return
+func commit(message string) error {
+	entries, err := LoadIndex()
+	if err != nil {
+		return fmt.Errorf("failed to load index: %w", err)
+	}
+	if len(entries) == 0 {
+		return fmt.Errorf("nothing to commit (index is empty)")
+	}
+
+	rootNode := BuildTree(entries)
+
+	rootTreeHash, err := WriteTree(rootNode)
+	if err != nil {
+		return fmt.Errorf("failed to write tree objects: %w", err)
+	}
+
+	var commitContent strings.Builder
+	commitContent.WriteString(fmt.Sprintf("tree %s\n", rootTreeHash))
+	commitContent.WriteString("\n")
+	commitContent.WriteString(message)
+
+	commitHash, err := HashStore([]byte(commitContent.String()), "commit")
+	if err != nil {
+		return fmt.Errorf("failed to create commit object: %w", err)
+	}
+
+	err = updateRef("refs/heads/main", commitHash)
+	if err != nil {
+		return fmt.Errorf("failed to update ref: %w", err)
+	}
+
+	fmt.Printf("[%s] %s\n", commitHash[:7], message)
+	return nil
+}
+
+func status() error {
+	return nil
 }
