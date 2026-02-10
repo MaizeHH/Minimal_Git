@@ -98,7 +98,7 @@ func WriteTree(node *Node) (string, error) {
 }
 
 // branch tracking
-func updateRef(refPath string, hash string) error {
+func UpdateRef(refPath string, hash string) error {
 	fullPath := filepath.Join(".gitre", refPath)
 
 	if err := os.MkdirAll(filepath.Dir(fullPath), 0755); err != nil {

@@ -24,13 +24,38 @@ func main() {
 		}
 		return
 	case "add":
-		add(os.Args[2:])
+		errs := add(os.Args[2:])
+		if len(errs) > 0 {
+			fmt.Fprintln(os.Stderr, "Errors occurred while adding files:")
+			for _, e := range errs {
+				fmt.Fprintf(os.Stderr, "  - %v\n", e)
+			}
+			os.Exit(1)
+		}
 		return
 	case "commit":
-		commit(os.Args[2])
+		if err = commit(os.Args[2]); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
 		return
 	case "log":
-		log()
+		if err = log(); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	case "checkout":
+		if err = checkout(os.Args[2]); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	case "switch":
+		switchBranch()
+		return
+	case "restore":
+		restore()
 		return
 	case "status":
 		status()
@@ -45,7 +70,7 @@ func main() {
 func initRepo() error {
 	var repoDir string = ".gitre"
 	var dirPerm os.FileMode = 0700
-	var filePerm os.FileMode = 0600
+	var filePerm os.FileMode = 0644
 	var err error
 	if err = os.Mkdir(repoDir, dirPerm); err != nil && os.IsNotExist(err) {
 		return fmt.Errorf("failed to create .gitre directory: %w", err)
@@ -151,7 +176,7 @@ func commit(message string) error {
 		return fmt.Errorf("failed to create commit object: %w", err)
 	}
 
-	err = updateRef("refs/heads/main", commitHash)
+	err = UpdateRef("refs/heads/main", commitHash)
 	if err != nil {
 		return fmt.Errorf("failed to update ref: %w", err)
 	}
@@ -189,6 +214,56 @@ func log() error {
 			fmt.Println("  |")
 		}
 	}
+	return nil
+}
+
+func checkout(name string) error {
+	newBranchPath := ".gitre/refs/heads/" + name
+	if _, err := os.Stat(newBranchPath); err == nil {
+		return fmt.Errorf("branch '%s' already exists", name)
+	}
+	branches, err := os.ReadDir(".gitre/refs/heads/")
+	if err != nil {
+		return fmt.Errorf("error finding branches: %w", err)
+	}
+	head, err := os.ReadFile(".gitre/HEAD")
+	if err != nil {
+		return fmt.Errorf("error reading file: %w", err)
+	}
+	head = bytes.TrimSpace(head)
+	currentBranch := strings.TrimPrefix(string(head), "ref: refs/heads/")
+	var branchList []string
+	fmt.Println("Choose which branch to copy (type number):")
+	for i, branch := range branches {
+		branchList = append(branchList, branch.Name())
+		if branch.Name() == currentBranch {
+			fmt.Printf("%d: %s (current)\n", i+1, branch.Name())
+		} else {
+			fmt.Printf("%d: %s\n", i+1, branch.Name())
+		}
+	}
+	var choice int
+	_, err = fmt.Scanln(&choice)
+	if err != nil || choice < 1 || choice > len(branches) {
+		fmt.Printf("provide valid input (1-%d)\n", len(branches))
+		return nil
+	}
+
+	hash, err := os.ReadFile(".gitre/refs/heads/" + branches[choice-1].Name())
+	if err != nil {
+		return fmt.Errorf("error reading file: %w", err)
+	}
+	os.WriteFile(".gitre/refs/heads/"+name, hash, 0644)
+	os.WriteFile(".gitre/HEAD", []byte("ref: refs/heads/"+name), 0644)
+
+	return nil
+}
+
+func switchBranch() error {
+	return nil
+}
+
+func restore() error {
 	return nil
 }
 

@@ -68,7 +68,7 @@ func IndexObject(file string) error {
 	if err != nil {
 		return fmt.Errorf("failed to marshal json content: %w", err)
 	}
-	if err = os.WriteFile(filepath.Join(".gitre", "index"), indexBytes, 0600); err != nil {
+	if err = os.WriteFile(filepath.Join(".gitre", "index"), indexBytes, 0644); err != nil {
 		return fmt.Errorf("failed to write marshalled content to index: %w", err)
 	}
 
