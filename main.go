@@ -268,5 +268,71 @@ func restore() error {
 }
 
 func status() error {
+	// staged comparison
+	indexEntries, err := LoadIndex()
+	indexMap := map[string]string{}
+	for _, entry := range indexEntries {
+		indexMap[entry.Path] = entry.Hash
+	}
+	head, err := os.ReadFile(".gitre/HEAD")
+	head = bytes.TrimSpace(head)
+	currentBranch := strings.TrimPrefix(string(head), "ref: refs/heads/")
+	fmt.Printf("On branch: %s\n", currentBranch)
+	headHash, err := os.ReadFile(".gitre/refs/heads/" + currentBranch)
+	content, err := ExtractObject(bytes.TrimSpace(headHash))
+	firstLine := strings.Split(string(content), "\n")[0]
+	treeHash := strings.TrimPrefix(firstLine, "tree ")
+	treeObj, _ := ExtractObject([]byte(treeHash))
+	headMap := map[string]string{}
+	var searchTree func(tree []byte, prefix string)
+	searchTree = func(tree []byte, prefix string) {
+		lines := strings.SplitSeq(string(tree), "\n")
+		for line := range lines {
+			if line == "" {
+				continue
+			}
+			splits := strings.Split(line, " ")
+			if splits[1] == "tree" {
+				treeObj, err := ExtractObject([]byte(splits[2]))
+				if err != nil {
+					fmt.Printf("%v\n", err)
+					return
+				}
+				searchTree(treeObj, prefix+splits[3]+"/")
+			} else {
+				headMap[prefix+splits[3]] = splits[2]
+			}
+		}
+	}
+	searchTree(treeObj, "")
+	fmt.Println("STAGING: ")
+	var mod, new []string
+	for k, v := range indexMap {
+		value, ok := headMap[k]
+		if ok && v != value {
+			mod = append(mod, k)
+		}
+		if !ok {
+			new = append(new, k)
+		}
+		delete(headMap, k)
+	}
+	fmt.Println("\nModified files:")
+	for _, k := range mod {
+		fmt.Printf("%s, ", k)
+	}
+	fmt.Println("\nNew files:")
+	for _, k := range new {
+		fmt.Printf("%s, ", k)
+	}
+	fmt.Println("\nDeleted files: ")
+	for k := range headMap {
+		fmt.Printf("%s, ", k)
+	}
+
+	// unstaged comparison
+	if err != nil {
+		return fmt.Errorf("error: %w", err)
+	}
 	return nil
 }
