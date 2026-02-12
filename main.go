@@ -268,7 +268,6 @@ func restore() error {
 }
 
 func status() error {
-	// staged comparison
 	indexEntries, err := LoadIndex()
 	indexMap := map[string]string{}
 	for _, entry := range indexEntries {
@@ -330,7 +329,24 @@ func status() error {
 		fmt.Printf("%s, ", k)
 	}
 
-	// unstaged comparison
+	fmt.Println("UNSTAGED: ")
+	ignores := accumIgnores()
+	diskFiles, err := traverseDir("./", ignores)
+	/*
+		for i := range len(diskFiles) {
+			fmt.Printf("%s", diskFiles[i])
+		}
+	*/
+	var modified, untracked []string
+	for _, file := range diskFiles {
+		value, ok := indexMap[file]
+		if ok {
+			// hash disk file and check here
+		} else {
+			untracked = append(untracked, file)
+		}
+	}
+
 	if err != nil {
 		return fmt.Errorf("error: %w", err)
 	}
