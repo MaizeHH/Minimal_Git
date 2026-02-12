@@ -304,7 +304,7 @@ func status() error {
 		}
 	}
 	searchTree(treeObj, "")
-	fmt.Println("STAGING: ")
+	fmt.Println("\nSTAGING: ")
 	var mod, new []string
 	for k, v := range indexMap {
 		value, ok := headMap[k]
@@ -329,22 +329,29 @@ func status() error {
 		fmt.Printf("%s, ", k)
 	}
 
-	fmt.Println("UNSTAGED: ")
+	fmt.Println("\nUNSTAGED: ")
 	ignores := accumIgnores()
 	diskFiles, err := traverseDir("./", ignores)
-	/*
-		for i := range len(diskFiles) {
-			fmt.Printf("%s", diskFiles[i])
-		}
-	*/
 	var modified, untracked []string
 	for _, file := range diskFiles {
 		value, ok := indexMap[file]
 		if ok {
-			// hash disk file and check here
+			data, _ := os.ReadFile(file)
+			fileHash, _ := HashObject(data, "blob")
+			if fileHash != value {
+				modified = append(modified, file)
+			}
 		} else {
 			untracked = append(untracked, file)
 		}
+	}
+	fmt.Println("\nModified files:")
+	for _, k := range modified {
+		fmt.Printf("%s, ", k)
+	}
+	fmt.Println("\nUntracked:")
+	for _, k := range untracked {
+		fmt.Printf("%s, ", k)
 	}
 
 	if err != nil {

@@ -27,16 +27,16 @@ func accumIgnores() []string {
 
 func traverseDir(dir string, ignores []string) ([]string, error) {
 	var list []string
-	var path string
 	files, err := os.ReadDir(dir)
 	if err != nil {
 		return list, fmt.Errorf("failed to read dir: %w", err)
 	}
 
 	for _, file := range files {
+		name := file.Name()
 		skip := false
 		for _, ignore := range ignores {
-			match, _ := filepath.Match(ignore, file.Name())
+			match, _ := filepath.Match(ignore, name)
 			if match {
 				skip = true
 				break
@@ -45,12 +45,15 @@ func traverseDir(dir string, ignores []string) ([]string, error) {
 		if skip {
 			continue
 		}
+		rawPath := filepath.Join(dir, name)
+
 		if file.IsDir() {
-			subFiles, _ := traverseDir(dir+file.Name()+"/", ignores)
+			subFiles, _ := traverseDir(rawPath, ignores)
 			list = append(list, subFiles...)
 		} else {
-			path = filepath.Clean(dir + file.Name())
-			list = append(list, path)
+			cleanPath := filepath.ToSlash(rawPath)
+			cleanPath = strings.TrimPrefix(cleanPath, "./")
+			list = append(list, cleanPath)
 		}
 	}
 

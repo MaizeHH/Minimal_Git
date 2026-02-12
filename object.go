@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/zlib"
 	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -75,39 +76,44 @@ func IndexObject(file string) error {
 	return nil
 }
 
-func HashStore(data []byte, objType string) (string, error) {
-	headerString := fmt.Sprintf("%s %d", objType, len(data))
+func HashObject(data []byte, objType string) (hash string, fullContent []byte) {
+	header := fmt.Sprintf("%s %d\x00", objType, len(data))
 
-	var content bytes.Buffer
-	content.WriteString(headerString)
-	content.WriteByte(0)
-	content.Write(data)
-
-	var byteContent []byte = content.Bytes()
+	fullContent = append([]byte(header), data...)
 
 	hasher := sha256.New()
-	hasher.Write(byteContent)
-	objectHash := fmt.Sprintf("%x", hasher.Sum(nil))
+	hasher.Write(fullContent)
+	hash = hex.EncodeToString(hasher.Sum(nil))
+
+	return hash, fullContent
+}
+
+func HashStore(data []byte, objType string) (string, error) {
+	objectHash, byteContent := HashObject(data, objType)
 
 	dirName := objectHash[:2]
 	fileName := objectHash[2:]
 	repoDir := filepath.Join(".gitre", "objects")
 
-	if err := os.Mkdir(filepath.Join(repoDir, dirName), 0755); err != nil && !os.IsExist(err) {
-		return "", fmt.Errorf("failed to create .gitre/objects/%s directory: %w", dirName, err)
+	if err := os.MkdirAll(filepath.Join(repoDir, dirName), 0755); err != nil {
+		return "", fmt.Errorf("failed to create directory: %w", err)
 	}
-
-	var compressedData bytes.Buffer
-	compressWriter := zlib.NewWriter(&compressedData)
-	if _, err := compressWriter.Write(byteContent); err != nil {
-		return "", fmt.Errorf("failed to compress content: %w", err)
-	}
-	compressWriter.Close()
-
 	objectPath := filepath.Join(repoDir, dirName, fileName)
-	if err := os.WriteFile(objectPath, compressedData.Bytes(), 0644); err != nil {
-		return "", fmt.Errorf("failed to write object file: %w", err)
+	if _, err := os.Stat(objectPath); err == nil {
+		return objectHash, nil
 	}
+
+	f, err := os.Create(objectPath)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+
+	zw := zlib.NewWriter(f)
+	if _, err := zw.Write(byteContent); err != nil {
+		return "", err
+	}
+	zw.Close()
 
 	return objectHash, nil
 }
