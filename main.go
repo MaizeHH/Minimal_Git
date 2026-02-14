@@ -58,7 +58,10 @@ func main() {
 		restore()
 		return
 	case "status":
-		status()
+		if err = status(); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
 		return
 	default:
 		fmt.Printf("unknown command: %s. available commands: init, add, commit, status, log\n", os.Args[1])
@@ -278,6 +281,9 @@ func status() error {
 	currentBranch := strings.TrimPrefix(string(head), "ref: refs/heads/")
 	fmt.Printf("On branch: %s\n", currentBranch)
 	headHash, err := os.ReadFile(".gitre/refs/heads/" + currentBranch)
+	if err != nil || headHash == nil {
+		return fmt.Errorf("no commit on current branch: %w", err)
+	}
 	content, err := ExtractObject(bytes.TrimSpace(headHash))
 	firstLine := strings.Split(string(content), "\n")[0]
 	treeHash := strings.TrimPrefix(firstLine, "tree ")
@@ -304,7 +310,7 @@ func status() error {
 		}
 	}
 	searchTree(treeObj, "")
-	fmt.Println("\nSTAGING: ")
+	fmt.Println("\nSTAGING: (index <-> commit)")
 	var mod, new []string
 	for k, v := range indexMap {
 		value, ok := headMap[k]
@@ -329,7 +335,7 @@ func status() error {
 		fmt.Printf("%s, ", k)
 	}
 
-	fmt.Println("\nUNSTAGED: ")
+	fmt.Println("\nUNSTAGED (disk <-> index): ")
 	ignores := accumIgnores()
 	diskFiles, err := traverseDir("./", ignores)
 	var modified, untracked []string
@@ -344,6 +350,7 @@ func status() error {
 		} else {
 			untracked = append(untracked, file)
 		}
+		delete(indexMap, file)
 	}
 	fmt.Println("\nModified files:")
 	for _, k := range modified {
@@ -351,6 +358,10 @@ func status() error {
 	}
 	fmt.Println("\nUntracked:")
 	for _, k := range untracked {
+		fmt.Printf("%s, ", k)
+	}
+	fmt.Println("\nDeleted files: ")
+	for k := range indexMap {
 		fmt.Printf("%s, ", k)
 	}
 
