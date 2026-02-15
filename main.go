@@ -165,8 +165,10 @@ func commit(message string) error {
 
 	head, err := os.ReadFile(".gitre/HEAD")
 	ref := bytes.TrimPrefix(head, []byte("ref: "))
+	ref = bytes.TrimSpace(ref)
 	path := filepath.Join(".gitre", string(ref))
 	p_hash, err := os.ReadFile(path)
+	p_hash = bytes.TrimSpace(p_hash)
 	var commitContent strings.Builder
 	commitContent.WriteString(fmt.Sprintf("tree %s\n", rootTreeHash))
 	if len(p_hash) > 0 {
@@ -212,10 +214,10 @@ func log() error {
 				break
 			}
 		}
-		hash = parentHash
-		if len(hash) > 0 {
+		if len(parentHash) > 0 {
 			fmt.Println("  |")
 		}
+		hash = parentHash
 	}
 	return nil
 }
