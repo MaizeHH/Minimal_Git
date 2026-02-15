@@ -173,6 +173,39 @@ func Test_Log(t *testing.T) {
 	}
 }
 
+func Test_Status(t *testing.T) {
+	tempDir, _ := os.MkdirTemp("", "gitre-status-*")
+	defer os.RemoveAll(tempDir)
+
+	setupInit(t, tempDir)
+
+	os.WriteFile(filepath.Join(tempDir, "to-be-modified.txt"), []byte("v1"), 0644)
+	os.WriteFile(filepath.Join(tempDir, "to-be-deleted.txt"), []byte("bye"), 0644)
+	runCommand(t, tempDir, "add", "to-be-modified.txt", "to-be-deleted.txt")
+	runCommand(t, tempDir, "commit", "Initial commit")
+
+	os.WriteFile(filepath.Join(tempDir, "to-be-modified.txt"), []byte("v2"), 0644)
+	runCommand(t, tempDir, "add", "to-be-modified.txt")
+
+	os.WriteFile(filepath.Join(tempDir, "new-file.txt"), []byte("hello"), 0644)
+	runCommand(t, tempDir, "add", "new-file.txt")
+
+	os.WriteFile(filepath.Join(tempDir, "untracked.txt"), []byte("mystery"), 0644)
+
+	output := runCommand(t, tempDir, "status")
+
+	if !strings.Contains(output, "new-file.txt") {
+		t.Error("Status should show new-file.txt in New files")
+	}
+	if !strings.Contains(output, "to-be-modified.txt") {
+		t.Error("Status should show to-be-modified.txt in Modified (Staging)")
+	}
+
+	if !strings.Contains(output, "untracked.txt") {
+		t.Error("Status should show untracked.txt in Untracked")
+	}
+}
+
 func runCommand(t *testing.T, dir string, name string, args ...string) string {
 	cmd := exec.Command(binPath, append([]string{name}, args...)...)
 	cmd.Dir = dir
