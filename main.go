@@ -10,7 +10,7 @@ import (
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Println("no args. available commands: init, add, commit")
+		fmt.Println("no valid args.")
 		return
 	}
 
@@ -128,20 +128,33 @@ func initRepo() error {
 }
 
 func add(args []string) []error {
-	var err error
 	var errors []error
+	files := make(map[string]struct{})
+	ignores := accumIgnores()
 	for _, arg := range args {
-		err = IndexObject(arg)
+		info, err := os.Stat(arg)
 		if err != nil {
-			errors = append(errors, fmt.Errorf("failed to add %s: %w", arg, err))
+			errors = append(errors, fmt.Errorf("path not found: %s", arg))
+			continue
+		}
+		if info.IsDir() {
+			diskFiles, _ := traverseDir(arg, ignores)
+			for _, f := range diskFiles {
+				files[f] = struct{}{}
+			}
 		} else {
-			fmt.Printf("added %s\n", arg)
+			files[arg] = struct{}{}
+		}
+	}
+	for filePath := range files {
+		err := IndexObject(filePath)
+		if err != nil {
+			errors = append(errors, fmt.Errorf("failed to add %s: %w", filePath, err))
+		} else {
+			fmt.Printf("added %s\n", filePath)
 		}
 	}
 	if len(errors) > 0 {
-		for _, err := range errors {
-			fmt.Fprintf(os.Stderr, "%v\n", err)
-		}
 		return errors
 	}
 	return nil
@@ -153,7 +166,7 @@ func commit(message string) error {
 		return fmt.Errorf("failed to load index: %w", err)
 	}
 	if len(entries) == 0 {
-		return fmt.Errorf("nothing to commit (index is empty)")
+		return fmt.Errorf("nothing to commit")
 	}
 
 	rootNode := BuildTree(entries)
