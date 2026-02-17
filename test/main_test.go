@@ -56,19 +56,15 @@ func Test_Init(t *testing.T) {
 }
 
 func Test_Add(t *testing.T) {
-	tempDir, _ := os.MkdirTemp("", "gitre-*")
+	tempDir, _ := os.MkdirTemp("", "gitre-add-*")
 	defer os.RemoveAll(tempDir)
 
 	setupInit(t, tempDir)
+
 	filesToAdd := []string{"file1.txt", "file2.txt"}
 	setupAdd(t, tempDir, filesToAdd...)
 
-	indexBytes, err := os.ReadFile(filepath.Join(tempDir, ".gitre", "index"))
-	if err != nil {
-		t.Fatalf("Could not read index: %v", err)
-	}
-	indexContent := string(indexBytes)
-
+	indexContent := readIndex(t, tempDir)
 	for _, fileName := range filesToAdd {
 		if !strings.Contains(indexContent, fileName) {
 			t.Errorf("Index missing expected file: %s", fileName)
@@ -76,15 +72,36 @@ func Test_Add(t *testing.T) {
 	}
 
 	setupAdd(t, tempDir, "file1.txt")
-	indexBytes, err = os.ReadFile(filepath.Join(tempDir, ".gitre", "index"))
-	if err != nil {
-		t.Fatalf("Could not read index: %v", err)
+	indexContent = readIndex(t, tempDir)
+	if count := strings.Count(indexContent, "file1.txt"); count > 1 {
+		t.Errorf("Duplicate entry found for file1.txt")
 	}
-	indexContent = string(indexBytes)
 
-	occurrences := strings.Count(indexContent, "file1.txt")
-	if occurrences > 1 {
-		t.Errorf("Duplicate entry found")
+	subDir := "myfolder"
+	subFile := filepath.Join(subDir, "nested.txt")
+	os.Mkdir(filepath.Join(tempDir, subDir), 0755)
+	os.WriteFile(filepath.Join(tempDir, subFile), []byte("nested"), 0644)
+
+	runCommand(t, tempDir, "add", subDir)
+
+	indexContent = readIndex(t, tempDir)
+	if !strings.Contains(indexContent, "myfolder/nested.txt") {
+		t.Errorf("Index missing nested file from subdirectory add")
+	}
+
+	os.WriteFile(filepath.Join(tempDir, "extra.txt"), []byte("extra"), 0644)
+	runCommand(t, tempDir, "add", ".", "extra.txt")
+
+	indexContent = readIndex(t, tempDir)
+	if !strings.Contains(indexContent, "extra.txt") {
+		t.Error("Index missing extra.txt after adding '.'")
+	}
+	if count := strings.Count(indexContent, "extra.txt"); count > 1 {
+		t.Errorf("Deduplication failed for 'add . extra.txt'")
+	}
+
+	if strings.Contains(indexContent, ".gitre/") {
+		t.Error("Error: .gitre internal files were added to index!")
 	}
 }
 
@@ -228,4 +245,12 @@ func setupAdd(t *testing.T, dir string, filenames ...string) {
 		os.WriteFile(filepath.Join(dir, f), []byte("content"), 0644)
 	}
 	runCommand(t, dir, "add", filenames...)
+}
+
+func readIndex(t *testing.T, tempDir string) string {
+	b, err := os.ReadFile(filepath.Join(tempDir, ".gitre", "index"))
+	if err != nil {
+		t.Fatalf("Failed to read index: %v", err)
+	}
+	return string(b)
 }
