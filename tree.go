@@ -97,6 +97,28 @@ func WriteTree(node *Node) (string, error) {
 	return HashStore(treeData, "tree")
 }
 
+func searchTree(tree []byte, prefix string) map[string]string {
+	objMap := map[string]string{}
+	lines := strings.SplitSeq(string(tree), "\n")
+	for line := range lines {
+		if line == "" {
+			continue
+		}
+		splits := strings.Split(line, " ")
+		if splits[1] == "tree" {
+			treeObj, err := ExtractObject([]byte(splits[2]))
+			if err != nil {
+				fmt.Printf("%v\n", err)
+				return objMap
+			}
+			searchTree(treeObj, prefix+splits[3]+"/")
+		} else {
+			objMap[prefix+splits[3]] = splits[2]
+		}
+	}
+	return objMap
+}
+
 // branch tracking
 func UpdateRef(refPath string, hash string) error {
 	fullPath := filepath.Join(".gitre", refPath)

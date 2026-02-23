@@ -33,6 +33,4 @@ go.work.sum
 
 .gitre
 .gitreignore
-example.txt
-example2.txt
-test_example
+*.txt

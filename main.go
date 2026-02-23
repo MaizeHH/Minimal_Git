@@ -52,7 +52,10 @@ func main() {
 		}
 		return
 	case "switch":
-		switchBranch()
+		if err = switchBranch(os.Args[2]); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
 		return
 	case "restore":
 		restore()
@@ -193,8 +196,7 @@ func commit(message string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create commit object: %w", err)
 	}
-
-	err = UpdateRef("refs/heads/main", commitHash)
+	err = UpdateRef(string(ref), commitHash)
 	if err != nil {
 		return fmt.Errorf("failed to update ref: %w", err)
 	}
@@ -277,7 +279,7 @@ func checkout(name string) error {
 	return nil
 }
 
-func switchBranch() error {
+func switchBranch(name string) error {
 	return nil
 }
 
@@ -304,27 +306,7 @@ func status() error {
 	treeHash := strings.TrimPrefix(firstLine, "tree ")
 	treeObj, _ := ExtractObject([]byte(treeHash))
 	headMap := map[string]string{}
-	var searchTree func(tree []byte, prefix string)
-	searchTree = func(tree []byte, prefix string) {
-		lines := strings.SplitSeq(string(tree), "\n")
-		for line := range lines {
-			if line == "" {
-				continue
-			}
-			splits := strings.Split(line, " ")
-			if splits[1] == "tree" {
-				treeObj, err := ExtractObject([]byte(splits[2]))
-				if err != nil {
-					fmt.Printf("%v\n", err)
-					return
-				}
-				searchTree(treeObj, prefix+splits[3]+"/")
-			} else {
-				headMap[prefix+splits[3]] = splits[2]
-			}
-		}
-	}
-	searchTree(treeObj, "")
+	headMap = searchTree(treeObj, "")
 	fmt.Println("\nSTAGING: (index <-> commit)")
 	var mod, new []string
 	for k, v := range indexMap {
